@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alurkerja-sdk"
+dynamic = ["version"]
+description = "SDK Python untuk addon AlurKerja: memanggil service AlurKerja tanpa setup manual"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Proprietary" }
+authors = [{ name = "Javan Cipta Solusi" }]
+dependencies = ["requests>=2.25"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Private :: Do Not Upload",
+]
+
+[project.urls]
+Repository = "https://github.com/alurkerja-id/alurkerja-addon-python-sdk"
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "build"]
+
+[tool.setuptools.dynamic]
+version = { attr = "alurkerja_sdk.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+alurkerja_sdk = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
