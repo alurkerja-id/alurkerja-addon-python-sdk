@@ -108,6 +108,48 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaises(AlurkerjaConfigError):
             AlurkerjaSDK({"token": "t", "baseurl": "http://asdb.com", "tenant": {"id": "abc"}})
 
+    def test_reads_process_and_actor(self):
+        svc = dict(
+            SVC,
+            process={
+                "definitionId": "cuti:7:def7",
+                "key": "cuti",
+                "name": "Pengajuan Cuti",
+                "version": 7,
+                "deploymentId": "dep7",
+                "tenantId": "camunda-tenant",
+                "instanceId": "instance-1",
+                "businessKey": "CUTI-001",
+                "activityId": "Activity_md",
+                "activityName": "Ambil Master Data",
+            },
+            actor={"email": "deployer@example.com", "source": "deployer"},
+        )
+        sdk, _ = make_sdk(svc)
+
+        process = sdk.process
+        self.assertEqual((process.definition_id, process.key, process.version), ("cuti:7:def7", "cuti", 7))
+        self.assertEqual((process.deployment_id, process.tenant_id), ("dep7", "camunda-tenant"))
+        self.assertEqual((process.instance_id, process.business_key), ("instance-1", "CUTI-001"))
+        self.assertEqual((process.activity_id, process.activity_name), ("Activity_md", "Ambil Master Data"))
+        self.assertEqual(process.raw["name"], "Pengajuan Cuti")
+        self.assertEqual((sdk.actor.email, sdk.actor.source), ("deployer@example.com", "deployer"))
+
+    def test_process_and_actor_optional(self):
+        sdk, _ = make_sdk()
+        self.assertIsNone(sdk.process)
+        self.assertIsNone(sdk.actor)
+
+    def test_invalid_process_or_actor_raises(self):
+        for svc in (
+            dict(SVC, process="cuti"),
+            dict(SVC, actor=["deployer"]),
+            dict(SVC, process={"version": "tujuh"}),
+        ):
+            with self.subTest(svc=svc):
+                with self.assertRaises(AlurkerjaConfigError):
+                    AlurkerjaSDK(svc)
+
     def test_from_ctx_prefers_top_level_svc(self):
         other = dict(SVC, baseurl="http://other.com")
         sdk = AlurkerjaSDK.from_ctx({"svc": SVC, "configuration": {"svc": other}})

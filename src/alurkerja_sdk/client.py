@@ -51,14 +51,63 @@ class Tenant:
         )
 
 
-def _to_int(value: Any) -> Optional[int]:
+@dataclass(frozen=True)
+class Process:
+    """BPMN yang sedang menjalankan service task (`svc.process`).
+
+    Identitas definisi (key, version, deployment) diambil platform dari Camunda,
+    bukan dari request, jadi aman dipakai untuk logging dan audit.
+    """
+
+    definition_id: Optional[str]
+    key: Optional[str]
+    name: Optional[str]
+    version: Optional[int]
+    deployment_id: Optional[str]
+    tenant_id: Optional[str]
+    instance_id: Optional[str]
+    business_key: Optional[str]
+    activity_id: Optional[str]
+    activity_name: Optional[str]
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any]) -> "Process":
+        return cls(
+            definition_id=data.get("definitionId"),
+            key=data.get("key"),
+            name=data.get("name"),
+            version=_to_int(data.get("version"), "svc.process.version"),
+            deployment_id=data.get("deploymentId"),
+            tenant_id=data.get("tenantId"),
+            instance_id=data.get("instanceId"),
+            business_key=data.get("businessKey"),
+            activity_id=data.get("activityId"),
+            activity_name=data.get("activityName"),
+            raw=dict(data),
+        )
+
+
+@dataclass(frozen=True)
+class Actor:
+    """Pemilik token (`svc.actor`). `source` saat ini selalu `deployer`."""
+
+    email: Optional[str]
+    source: Optional[str]
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any]) -> "Actor":
+        return cls(email=data.get("email"), source=data.get("source"))
+
+
+def _to_int(value: Any, name: str = "svc.tenant.id") -> Optional[int]:
     # id tenant di model berupa uint; config dari form bisa mengirimnya sebagai "1".
     if value is None or isinstance(value, bool):
         return None
     try:
         return int(value)
     except (TypeError, ValueError):
-        raise AlurkerjaConfigError(f"svc.tenant.id harus angka: {value!r}") from None
+        raise AlurkerjaConfigError(f"{name} harus angka: {value!r}") from None
 
 
 class AlurkerjaSDK:
@@ -66,8 +115,9 @@ class AlurkerjaSDK:
 
     Args:
         svc: Informasi service dari platform. Wajib berisi `token` dan
-            `baseurl`; `tenant` ({id, name, slug, uuid}) opsional. Key lain tetap
-            bisa dibaca lewat `sdk.svc`. Boleh juga berupa string JSON.
+            `baseurl`; `tenant` ({id, name, slug, uuid}), `process`, dan `actor`
+            opsional. Key lain tetap bisa dibaca lewat `sdk.svc`. Boleh juga
+            berupa string JSON.
         timeout: Batas waktu request dalam detik.
         session: `requests.Session` sendiri, mis. untuk test atau pooling.
     """
@@ -93,6 +143,8 @@ class AlurkerjaSDK:
         if tenant is not None and not isinstance(tenant, Mapping):
             raise AlurkerjaConfigError("svc.tenant harus berupa object {id, name, slug, uuid}")
         self.tenant: Optional[Tenant] = Tenant.from_mapping(tenant) if tenant else None
+        self.process: Optional[Process] = _optional_section(svc, "process", Process.from_mapping)
+        self.actor: Optional[Actor] = _optional_section(svc, "actor", Actor.from_mapping)
 
         token = token.strip()
         self._auth_header = token if token.lower().startswith("bearer ") else f"Bearer {token}"
@@ -188,6 +240,15 @@ class AlurkerjaSDK:
         if not 200 <= response.status_code < 300:
             raise AlurkerjaAPIError(response.status_code, body, method, url)
         return body
+
+
+def _optional_section(svc: Mapping[str, Any], key: str, build: Any) -> Any:
+    section = svc.get(key)
+    if section is None:
+        return None
+    if not isinstance(section, Mapping):
+        raise AlurkerjaConfigError(f"svc.{key} harus berupa object")
+    return build(section)
 
 
 def _load_svc(svc: Union[Mapping[str, Any], str]) -> Mapping[str, Any]:

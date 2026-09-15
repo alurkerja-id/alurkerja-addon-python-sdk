@@ -4,32 +4,49 @@ SDK Python untuk script addon AlurKerja. Script cukup menerima `svc` dari
 platform, lalu memanggil service AlurKerja (mis. master data di `probis`) tanpa
 merakit URL, header auth, atau header tenant sendiri.
 
+## Dari mana `svc` datang
+
+Addon yang opt-in di `index.json`:
+
+```json
+{ "name": "mockapi", "svc": { "enabled": true } }
+```
+
+menerima `ctx["svc"]` saat script dijalankan dari service task BPMN. Token-nya milik
+user yang men-deploy versi BPMN yang sedang berjalan (role minimal admin SOP),
+dibuat otomatis oleh integration-service. Addon tanpa opt-in tidak menerima `svc`.
+
 ## Instalasi
 
 ```bash
-pip install "git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.1.0"
+pip install "git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.0"
 ```
 
 Lewat SSH:
 
 ```bash
-pip install "git+ssh://git@github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.1.0"
+pip install "git+ssh://git@github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.0"
 ```
 
 Di `requirements.txt`:
 
 ```text
-alurkerja-sdk @ git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.1.0
+alurkerja-sdk @ git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.0
 ```
 
 ## Pemakaian
 
 ```python
+import sys
+
 from alurkerja_sdk import AlurkerjaSDK, AlurkerjaAPIError
 
 
 def run(ctx):
-    sdk = AlurkerjaSDK.from_ctx(ctx)          # atau AlurkerjaSDK(ctx["configuration"]["svc"])
+    sdk = AlurkerjaSDK.from_ctx(ctx)          # membaca ctx["svc"]
+
+    # BPMN yang sedang berjalan, mis. untuk logging
+    print(f"{sdk.process.key} v{sdk.process.version} @ {sdk.process.activity_id} as {sdk.actor.email}", file=sys.stderr)
 
     # GET /api/v1/probis/masterdata/1/customers/records?page=1
     records = sdk.get(
@@ -61,7 +78,20 @@ def run(ctx):
     "name": "Tenant A",
     "slug": "tenant-a",
     "uuid": "f8672713-7ec0-4a8a-98ba-f6adf420d105"
-  }
+  },
+  "process": {
+    "definitionId": "pengajuan-cuti:7:3f1c...",
+    "key": "pengajuan-cuti",
+    "name": "Pengajuan Cuti",
+    "version": 7,
+    "deploymentId": "a41b...",
+    "tenantId": "f8672713-...",
+    "instanceId": "9c2e...",
+    "businessKey": "CUTI-2026-001",
+    "activityId": "Activity_ambil_md",
+    "activityName": "Ambil Master Data"
+  },
+  "actor": { "email": "deployer@example.com", "source": "deployer" }
 }
 ```
 
@@ -70,10 +100,15 @@ def run(ctx):
 | `token` | ya | Dikirim sebagai `Authorization: Bearer <token>`. Prefix `Bearer ` boleh ada atau tidak. |
 | `baseurl` | ya | `http://host`, `http://host/api/v1`, dan slash di akhir semuanya dianggap sama. |
 | `tenant` | tidak | Mengikuti JSON `models.Tenant` di tenant-management-service. Dibaca sebagai `sdk.tenant.id/.name/.slug/.uuid`; field lain lewat `sdk.tenant.raw`. Kalau ada `slug`, dikirim sebagai header `x-active-tenant`. |
+| `process` | tidak | BPMN yang sedang berjalan: `sdk.process.definition_id/.key/.name/.version/.deployment_id/.tenant_id/.instance_id/.business_key/.activity_id/.activity_name`; aslinya lewat `sdk.process.raw`. |
+| `actor` | tidak | Pemilik token: `sdk.actor.email`, `sdk.actor.source`. |
 | lainnya | tidak | Tetap bisa dibaca lewat `sdk.svc["..."]`. |
 
 `svc` juga boleh berupa string JSON. `from_ctx` mencari `ctx["svc"]` lebih dulu,
-lalu `ctx["configuration"]["svc"]`.
+lalu `ctx["configuration"]["svc"]` (untuk pengujian lokal atau addon lama).
+
+Token berumur pendek: buat `AlurkerjaSDK` di dalam `run(ctx)` dari ctx yang diterima,
+jangan disimpan antar eksekusi.
 
 ### Method
 
@@ -96,6 +131,11 @@ dengan bentuk `(service, *path, params=, json=, data=, files=, headers=, timeout
 | `AlurkerjaAPIError` | Server menjawab non-2xx. Punya `status_code`, `body`, `method`, `url`. |
 
 Semuanya turunan `AlurkerjaError`.
+
+## Changelog
+
+- **0.2.0** — `sdk.process` dan `sdk.actor` dari `svc.process` / `svc.actor`.
+- **0.1.0** — Rilis awal: klien HTTP, `svc.tenant`, header `x-active-tenant`.
 
 ## Development
 
