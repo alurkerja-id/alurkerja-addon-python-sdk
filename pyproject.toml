@@ -7,7 +7,7 @@ name = "alurkerja-sdk"
 dynamic = ["version"]
 description = "SDK Python untuk addon AlurKerja: memanggil service AlurKerja tanpa setup manual"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.8"
 license = { text = "Proprietary" }
 authors = [{ name = "Javan Cipta Solusi" }]
 dependencies = ["requests>=2.25"]

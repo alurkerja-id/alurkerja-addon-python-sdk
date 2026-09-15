@@ -19,19 +19,19 @@ dibuat otomatis oleh integration-service. Addon tanpa opt-in tidak menerima `svc
 ## Instalasi
 
 ```bash
-pip install "git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.0"
+pip install "git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.1"
 ```
 
 Lewat SSH:
 
 ```bash
-pip install "git+ssh://git@github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.0"
+pip install "git+ssh://git@github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.1"
 ```
 
 Di `requirements.txt`:
 
 ```text
-alurkerja-sdk @ git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.0
+alurkerja-sdk @ git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.1
 ```
 
 ## Pemakaian
@@ -134,6 +134,7 @@ Semuanya turunan `AlurkerjaError`.
 
 ## Changelog
 
+- **0.2.1** — Mendukung Python 3.8 (`python3` bawaan Ubuntu 20.04).
 - **0.2.0** — `sdk.process` dan `sdk.actor` dari `svc.process` / `svc.actor`.
 - **0.1.0** — Rilis awal: klien HTTP, `svc.tenant`, header `x-active-tenant`.
 
