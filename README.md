@@ -19,19 +19,19 @@ dibuat otomatis oleh integration-service. Addon tanpa opt-in tidak menerima `svc
 ## Instalasi
 
 ```bash
-pip install "git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.1"
+pip install "git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.3.0"
 ```
 
 Lewat SSH:
 
 ```bash
-pip install "git+ssh://git@github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.1"
+pip install "git+ssh://git@github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.3.0"
 ```
 
 Di `requirements.txt`:
 
 ```text
-alurkerja-sdk @ git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.2.1
+alurkerja-sdk @ git+https://github.com/alurkerja-id/alurkerja-addon-python-sdk.git@v0.3.0
 ```
 
 ## Pemakaian
@@ -110,7 +110,42 @@ lalu `ctx["configuration"]["svc"]` (untuk pengujian lokal atau addon lama).
 Token berumur pendek: buat `AlurkerjaSDK` di dalam `run(ctx)` dari ctx yang diterima,
 jangan disimpan antar eksekusi.
 
-### Method
+### Membentuk response script
+
+Bentuk balasan script diurus SDK, termasuk `runkey` dan key `type` untuk kegagalan:
+
+```python
+def run(ctx):
+    sdk = AlurkerjaSDK.from_ctx(ctx)
+
+    if not slug:
+        return sdk.error("slug wajib diisi", code="MISSING_PARAMETER")
+
+    try:
+        records = sdk.get("probis", "masterdata", sdk.tenant.id, slug, "records")
+    except AlurkerjaAPIError as err:
+        return sdk.error(err)                     # error/http_status/response terisi sendiri
+
+    if not records["content"]:
+        return sdk.bpmn_error("DATA_KOSONG", "Master data belum berisi record")
+
+    return sdk.success(records, message="Master data terbaca", total=records["totalElements"])
+```
+
+| Method | Hasil | `type` | Exit code |
+| --- | --- | :---: | :---: |
+| `sdk.success(data=None, message=None, **extra)` | `{"status": "ok", "message": …, "data": …, "runkey": …}` | — | 0 |
+| `sdk.error(message_or_exception, code=None, data=None, **extra)` | `{"status": "error", "type": "RUNTIME_ERROR", "message": …, "error": …}` | `RUNTIME_ERROR` | 1 / 2 / 3 |
+| `sdk.bpmn_error(code, message=None, data=None, **extra)` | `{"status": "error", "type": "BPMN_ERROR", "error": code, …}` | `BPMN_ERROR` | 0 |
+
+- **`**extra`** menambah key di **top-level**, yaitu yang di-merge ke `variables` proses.
+- **`RUNTIME_ERROR`** = gangguan teknis → incident di Cockpit, bisa di-retry operator.
+- **`BPMN_ERROR`** = kegagalan bisnis → Camunda melempar `BpmnError` dengan `errorCode = code`, ditangkap error boundary event berkode sama. Exit code-nya 0, karena exit non-zero membuat platform menjawab 500 dan proses berhenti sebagai incident.
+- `exit_code_for(response)` dipakai di `main()`: `sys.exit(exit_code_for(result))`.
+- Tersedia juga sebagai fungsi modul (`success`, `error`, `bpmn_error`, `exit_code_for`) untuk dipakai saat SDK belum sempat dibuat, mis. `svc` tidak lengkap. Di situ `runkey=` diisi manual.
+- Alias `sdk.bpmnError(...)` tersedia supaya penamaannya sama dengan istilah di diagram.
+
+### Method HTTP
 
 `get`, `post`, `put`, `patch`, `delete`, dan `request(method, ...)`, semuanya
 dengan bentuk `(service, *path, params=, json=, data=, files=, headers=, timeout=)`.
@@ -134,6 +169,7 @@ Semuanya turunan `AlurkerjaError`.
 
 ## Changelog
 
+- **0.3.0** — `sdk.success()`, `sdk.error()`, `sdk.bpmn_error()`, dan `exit_code_for()`: bentuk response script (termasuk key `type`: `RUNTIME_ERROR` / `BPMN_ERROR`) diurus SDK.
 - **0.2.1** — Mendukung Python 3.8 (`python3` bawaan Ubuntu 20.04).
 - **0.2.0** — `sdk.process` dan `sdk.actor` dari `svc.process` / `svc.actor`.
 - **0.1.0** — Rilis awal: klien HTTP, `svc.tenant`, header `x-active-tenant`.
