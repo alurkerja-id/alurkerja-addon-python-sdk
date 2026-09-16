@@ -14,6 +14,7 @@ from urllib.parse import quote, urlparse
 
 import requests
 
+from . import responses
 from .errors import AlurkerjaAPIError, AlurkerjaConfigError, AlurkerjaRequestError
 
 API_PREFIX = "/api/v1"
@@ -120,6 +121,8 @@ class AlurkerjaSDK:
             berupa string JSON.
         timeout: Batas waktu request dalam detik.
         session: `requests.Session` sendiri, mis. untuk test atau pooling.
+        runkey: Runkey eksekusi, dipakai `success()`/`error()`. Terisi sendiri
+            lewat `from_ctx`.
     """
 
     def __init__(
@@ -128,6 +131,7 @@ class AlurkerjaSDK:
         *,
         timeout: float = DEFAULT_TIMEOUT,
         session: Optional[requests.Session] = None,
+        runkey: Optional[str] = None,
     ) -> None:
         svc = _load_svc(svc)
 
@@ -136,6 +140,7 @@ class AlurkerjaSDK:
             raise AlurkerjaConfigError("svc.token wajib diisi")
 
         self.svc: Dict[str, Any] = dict(svc)
+        self.runkey = runkey
         self.api_url = _normalize_base_url(svc.get("baseurl"))
         self.timeout = timeout
 
@@ -162,11 +167,40 @@ class AlurkerjaSDK:
             svc = configuration.get("svc") if isinstance(configuration, Mapping) else None
         if svc is None:
             raise AlurkerjaConfigError("svc tidak ditemukan di ctx['svc'] maupun ctx['configuration']['svc']")
+        kwargs.setdefault("runkey", ctx.get("runkey"))
         return cls(svc, **kwargs)
 
     def __repr__(self) -> str:
         tenant = self.tenant.slug if self.tenant else None
         return f"AlurkerjaSDK(api_url={self.api_url!r}, tenant={tenant!r}, token='***')"
+
+    def success(self, data: Any = None, message: Optional[str] = None, **extra: Any) -> dict:
+        """Response sukses untuk script; `runkey` diisi dari ctx.
+
+            return sdk.success(records, message="Master data terbaca")
+        """
+        return responses.success(data, message, runkey=self.runkey, **extra)
+
+    def error(self, message: Any, code: Optional[str] = None, data: Any = None, **extra: Any) -> dict:
+        """Response gagal untuk script; `runkey` diisi dari ctx.
+
+        `message` boleh berupa exception SDK — `error`, `http_status`, dan
+        `response` terisi sendiri:
+
+            except AlurkerjaAPIError as err:
+                return sdk.error(err)
+        """
+        return responses.error(message, code, data, runkey=self.runkey, **extra)
+
+    def bpmn_error(self, code: str, message: Optional[str] = None, data: Any = None, **extra: Any) -> dict:
+        """Kegagalan bisnis yang ditangkap error boundary event di diagram.
+
+            return sdk.bpmn_error("STOK_HABIS", "Stok barang tidak mencukupi")
+        """
+        return responses.bpmn_error(code, message, data, runkey=self.runkey, **extra)
+
+    # Alias camelCase supaya sama dengan penamaan di diagram/BPMN.
+    bpmnError = bpmn_error
 
     def get(self, service: str, *path: PathSegment, **kwargs: Any) -> Any:
         return self.request("GET", service, *path, **kwargs)
